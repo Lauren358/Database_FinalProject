@@ -1,6 +1,7 @@
 #include "sqlite3.h"
 #include <iostream>
 #include <string>
+#include <cctype>
 #include <iomanip>
 #include <climits>
 
@@ -11,7 +12,7 @@ using namespace std;
 *  Date last updated: 5/11/2026
 * Purpose: This program connects to a plant nusery's database and allows the user to add a customer, add or delete a product, update the status of an order, update customer information, delete a product and make a purchase from the nursery. The user is also able to view a customer's order information and customer information.   
 */
-//*Note:AI was used to *
+//*Note:AI was used to minimize syntax errors and correct formatting *
 
 int mainMenu();
 void printMainMenu();
@@ -24,16 +25,14 @@ void addProduct(sqlite3 *);
 void deleteProduct(sqlite3 *);
 
 //2 table update options
-void updateOrder_status(sqlite3 *);
+void updateOrderStatus(sqlite3 *);
 void updateCustomerInfo(sqlite3 *);
 
 //making a purchase
-void purchase(sqlite3 *);
+void makePurchase(sqlite3 *);
 
-//display uses join
-void printCustomerPage(sqlite3_stmt *, int, int);//check if this one qualifies
-void printOrderinfoPage(sqlite3_stmt *, int, int);
-
+void printCustomerPage(sqlite3 *);
+void printOrderInfoPage(sqlite3 *);
 
 int main()
 {
@@ -77,41 +76,41 @@ int main()
         switch(choice) {
 
             case 1:
-                addCustomer();
+                addCustomer(mydb);
                 break;
-
+        
             case 2:
-                addProduct();
+                addProduct(mydb);
                 break;
-
+        
             case 3:
-                updateOrderStatus();
+                updateOrderStatus(mydb);
                 break;
-
+        
             case 4:
-                updateCustomerInfo();
+                updateCustomerInfo(mydb);
                 break;
-
+        
             case 5:
-                deleteProduct();
+                deleteProduct(mydb);
                 break;
-
+        
             case 6:
-                makePurchase();
+                makePurchase(mydb);
                 break;
-
+        
             case 7:
-                printCustomerPage();
+                printCustomerPage(mydb);
                 break;
-
+        
             case 8:
-                printOrderInfoPage();
+                printOrderInfoPage(mydb);
                 break;
-
+        
             case 9:
                 cout << "Exiting...\n";
                 break;
-
+        
             default:
                 cout << "Invalid choice.\n";
         }
@@ -119,89 +118,166 @@ int main()
     } while(choice != 9);
 
     sqlite3_close(mydb);
+    return 0;
 
 }
 
 // add customer
 
-void addCustomer() {
+void addCustomer(sqlite3 *DB) {
 
-    string name, email, phone;
-    double balance;
+    int customerID;
+    string first_name;
+    string last_name;
+    string phone;
+    string payment_info;
+    string address;
+    string email;
 
+    sqlite3_stmt* stmt;
+
+    //finding unused customer ID
+    string getID =
+        "SELECT IFNULL(MAX(Customer_ID), 0) + 1 FROM Customers; ";
+
+    sqlite3_prepare_v2(DB, getID.c_str(), -1, &stmt, NULL);
+
+    sqlite3_step(stmt);
+
+    customerID = sqlite3_column_int(stmt, 0);
+
+    sqlite3_finalize(stmt);
+
+    // get user input 
     cin.ignore();
 
-    cout << "Enter customer name: ";
-    getline(cin, name);
+    cout << "Enter first name: ";
+    getline(cin, first_name);
+
+    cout << "Enter last name: ";
+    getline(cin, last_name);
+
+    cout << "Enter phone number: ";
+    getline(cin, phone);
+
+    cout << "Enter payment info (cash/card): ";
+    getline(cin, payment_info);
+
+    cout << "Enter address: ";
+    getline(cin, address);
 
     cout << "Enter email: ";
     getline(cin, email);
 
-    cout << "Enter phone: ";
-    getline(cin, phone);
-
-    cout << "Enter balance: ";
-    cin >> balance;
+    //insert customer
 
     string sql =
-        "INSERT INTO customer(name,email,phone,balance) "
-        "VALUES(?,?,?,?);";
-
-    sqlite3_stmt* stmt;
+        "INSERT INTO customer "
+        "(Customer_ID, First_name, Last_name, Phone, "
+        "Payment_info, Address, Email) "
+        "VALUES (?, ?, ?, ?, ?, ?, ?);";
 
     sqlite3_prepare_v2(DB, sql.c_str(), -1, &stmt, NULL);
 
-    sqlite3_bind_text(stmt, 1, name.c_str(), -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 2, email.c_str(), -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 3, phone.c_str(), -1, SQLITE_STATIC);
-    sqlite3_bind_double(stmt, 4, balance);
+    sqlite3_bind_int(stmt, 1, customerID);
+
+    sqlite3_bind_text(stmt, 2,
+                      first_name.c_str(),
+                      -1,
+                      SQLITE_STATIC);
+
+    sqlite3_bind_text(stmt, 3,
+                      last_name.c_str(),
+                      -1,
+                      SQLITE_STATIC);
+
+    sqlite3_bind_text(stmt, 4,
+                      phone.c_str(),
+                      -1,
+                      SQLITE_STATIC);
+
+    sqlite3_bind_text(stmt, 5,
+                      payment_info.c_str(),
+                      -1,
+                      SQLITE_STATIC);
+
+    sqlite3_bind_text(stmt, 6,
+                      address.c_str(),
+                      -1,
+                      SQLITE_STATIC);
+
+    sqlite3_bind_text(stmt, 7,
+                      email.c_str(),
+                      -1,
+                      SQLITE_STATIC);
 
     sqlite3_step(stmt);
 
     sqlite3_finalize(stmt);
-
-    cout << "Customer added successfully.\n";
+    //shows message of being added successfully and displays customer ID
+    cout << "\nCustomer added successfully.\n";
+    cout << "Customer ID: "
+         << customerID << endl;
 }
-
 // add product
-void addProduct() {
+void addProduct(sqlite3 *DB) {
 
-    string name;
-    double price;
-    int quantity;
+    string name, category;
+    double cost;
+    int quantity, productID;
+
+    sqlite3_stmt* stmt;
+
+    string getID =
+        "SELECT IFNULL(MAX(Product_ID), 0) + 1 FROM Product;";
+
+    sqlite3_prepare_v2(DB, getID.c_str(), -1, &stmt, NULL);
+
+    sqlite3_step(stmt);
+
+    productID = sqlite3_column_int(stmt, 0);
+
+    sqlite3_finalize(stmt);
 
     cin.ignore();
 
     cout << "Enter product name: ";
     getline(cin, name);
 
-    cout << "Enter price: ";
-    cin >> price;
+    cout << "Enter product cost: ";
+    cin >> cost;
 
     cout << "Enter quantity: ";
     cin >> quantity;
 
-    string sql =
-        "INSERT INTO product(productName,price,quantity) "
-        "VALUES(?,?,?);";
+    cin.ignore();
 
-    sqlite3_stmt* stmt;
+    cout << "Enter category: ";
+    getline(cin, category);
+
+    string sql =
+        "INSERT INTO Product "
+        "(Product_ID, Product_descript, Cost, Quantity, Category) "
+        "VALUES(?,?,?,?,?);";
 
     sqlite3_prepare_v2(DB, sql.c_str(), -1, &stmt, NULL);
 
-    sqlite3_bind_text(stmt, 1, name.c_str(), -1, SQLITE_STATIC);
-    sqlite3_bind_double(stmt, 2, price);
-    sqlite3_bind_int(stmt, 3, quantity);
+    sqlite3_bind_int(stmt, 1, productID);
+    sqlite3_bind_text(stmt, 2, name.c_str(), -1, SQLITE_STATIC);
+    sqlite3_bind_double(stmt, 3, cost);
+    sqlite3_bind_int(stmt, 4, quantity);
+    sqlite3_bind_text(stmt, 5, category.c_str(), -1, SQLITE_STATIC);
 
     sqlite3_step(stmt);
 
     sqlite3_finalize(stmt);
 
     cout << "Product added successfully.\n";
+    cout << "Product ID: " << productID << endl;
 }
 
 // update order status
-void updateOrderStatus() {
+void updateOrderStatus(sqlite3 *DB) {
 
     int orderID;
     string status;
@@ -215,7 +291,7 @@ void updateOrderStatus() {
     getline(cin, status);
 
     string sql =
-        "UPDATE orders SET status=? WHERE orderID=?;";
+        "UPDATE Orders SET Order_status=? WHERE Order_ID=?;";
 
     sqlite3_stmt* stmt;
 
@@ -228,63 +304,220 @@ void updateOrderStatus() {
 
     sqlite3_finalize(stmt);
 
-    cout << "Order updated successfully.\n";
+    cout << "Status of order "<<orderID<<" updated successfully.\n";
 }
 
 // update customer info
 
-void updateCustomerInfo() {
+void updateCustomerInfo(sqlite3 *DB) {
 
     int customerID;
-    string email, phone;
 
-    cout << "Enter customer ID: ";
+    cout << "Enter Customer ID: ";
     cin >> customerID;
-
-    cin.ignore();
-
-    cout << "Enter new email: ";
-    getline(cin, email);
-
-    cout << "Enter new phone: ";
-    getline(cin, phone);
-
-    string sql =
-        "UPDATE customer SET email=?, phone=? "
-        "WHERE customerID=?;";
 
     sqlite3_stmt* stmt;
 
-    sqlite3_prepare_v2(DB, sql.c_str(), -1, &stmt, NULL);
+    //get customer's info
 
-    sqlite3_bind_text(stmt, 1, email.c_str(), -1, SQLITE_STATIC);
-    sqlite3_bind_text(stmt, 2, phone.c_str(), -1, SQLITE_STATIC);
-    sqlite3_bind_int(stmt, 3, customerID);
+    string selectSQL =
+        "SELECT First_name, Last_name, Phone, "
+        "Payment_info, Address, Email "
+        "FROM Customers WHERE Customer_ID=?;";
+
+    sqlite3_prepare_v2(DB,
+                       selectSQL.c_str(),
+                       -1,
+                       &stmt,
+                       NULL);
+
+    sqlite3_bind_int(stmt, 1, customerID);
+
+    if (sqlite3_step(stmt) != SQLITE_ROW) {
+
+        cout << "Customer not found.\n";
+
+        sqlite3_finalize(stmt);
+
+        return;
+    }
+
+    // Store current values
+
+    string first_name =
+        reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
+
+    string last_name =
+        reinterpret_cast<const char*>(sqlite3_column_text(stmt, 1));
+
+    string phone =
+        reinterpret_cast<const char*>(sqlite3_column_text(stmt, 2));
+
+    string payment_info =
+        reinterpret_cast<const char*>(sqlite3_column_text(stmt, 3));
+
+    string address =
+        reinterpret_cast<const char*>(sqlite3_column_text(stmt, 4));
+
+    string email =
+        reinterpret_cast<const char*>(sqlite3_column_text(stmt, 5));
+
+    sqlite3_finalize(stmt);
+
+    // Displays info before user changes it 
+
+    cout << "\n----- CURRENT CUSTOMER INFO -----\n";
+
+    cout << "Customer ID: " << customerID << endl;
+    cout << "First Name: " << first_name << endl;
+    cout << "Last Name: " << last_name << endl;
+    cout << "Phone: " << phone << endl;
+    cout << "Payment Info: " << payment_info << endl;
+    cout << "Address: " << address << endl;
+    cout << "Email: " << email << endl;
+
+    cout << "---------------------------------\n";
+
+    // asks user what information they would like to update
+
+    char choice;
+
+    cin.ignore();
+
+    cout << "\nChange First Name? (Y/N): ";
+    cin >> choice;
+    cin.ignore();
+    //accepts users input uppercase and lowercase
+    if (toupper(choice) == 'Y') {
+
+        cout << "Enter new first name: ";
+        getline(cin, first_name);
+    }
+
+    cout << "Change Last Name? (Y/N): ";
+    cin >> choice;
+    cin.ignore();
+
+    if (toupper(choice) == 'Y') {
+
+        cout << "Enter new last name: ";
+        getline(cin, last_name);
+    }
+
+    cout << "Change Phone? (Y/N): ";
+    cin >> choice;
+    cin.ignore();
+
+    if (toupper(choice) == 'Y') {
+
+        cout << "Enter new phone: ";
+        getline(cin, phone);
+    }
+
+    cout << "Change Payment Info? (Y/N): ";
+    cin >> choice;
+    cin.ignore();
+
+    if (toupper(choice) == 'Y') {
+
+        cout << "Enter new payment info: ";
+        getline(cin, payment_info);
+    }
+
+    cout << "Change Address? (Y/N): ";
+    cin >> choice;
+    cin.ignore();
+
+    if (toupper(choice) == 'Y') {
+
+        cout << "Enter new address: ";
+        getline(cin, address);
+    }
+
+    cout << "Change Email? (Y/N): ";
+    cin >> choice;
+    cin.ignore();
+
+    if (toupper(choice) == 'Y') {
+
+        cout << "Enter new email: ";
+        getline(cin, email);
+    }
+
+    // updates customer information
+
+    string updateSQL =
+        "UPDATE Customers SET "
+        "First_name=?, "
+        "Last_name=?, "
+        "Phone=?, "
+        "Payment_info=?, "
+        "Address=?, "
+        "Email=? "
+        "WHERE Customer_ID=?;";
+
+    sqlite3_prepare_v2(DB,
+                       updateSQL.c_str(),
+                       -1,
+                       &stmt,
+                       NULL);
+
+    sqlite3_bind_text(stmt, 1,
+                      first_name.c_str(),
+                      -1,
+                      SQLITE_STATIC);
+
+    sqlite3_bind_text(stmt, 2,
+                      last_name.c_str(),
+                      -1,
+                      SQLITE_STATIC);
+
+    sqlite3_bind_text(stmt, 3,
+                      phone.c_str(),
+                      -1,
+                      SQLITE_STATIC);
+
+    sqlite3_bind_text(stmt, 4,
+                      payment_info.c_str(),
+                      -1,
+                      SQLITE_STATIC);
+
+    sqlite3_bind_text(stmt, 5,
+                      address.c_str(),
+                      -1,
+                      SQLITE_STATIC);
+
+    sqlite3_bind_text(stmt, 6,
+                      email.c_str(),
+                      -1,
+                      SQLITE_STATIC);
+
+    sqlite3_bind_int(stmt, 7, customerID);
 
     sqlite3_step(stmt);
 
     sqlite3_finalize(stmt);
 
-    cout << "Customer updated successfully.\n";
+    cout << "\nCustomer information updated successfully.\n";
 }
 
 // delete product
 
-void deleteProduct() {
+void deleteProduct(sqlite3 *DB) {
 
-    int productID;
+    int Product_ID;
 
     cout << "Enter product ID to delete: ";
-    cin >> productID;
+    cin >> Product_ID;
 
     string sql =
-        "DELETE FROM product WHERE productID=?;";
+        "DELETE FROM Product WHERE Product_ID=?;";
 
     sqlite3_stmt* stmt;
 
     sqlite3_prepare_v2(DB, sql.c_str(), -1, &stmt, NULL);
 
-    sqlite3_bind_int(stmt, 1, productID);
+    sqlite3_bind_int(stmt, 1, Product_ID);
 
     sqlite3_step(stmt);
 
@@ -295,37 +528,40 @@ void deleteProduct() {
 
 // make purchase
 
-void makePurchase() {
+void makePurchase(sqlite3 *DB) {
 
-    int customerID;
-    int productID;
-    int quantity;
+    int Customer_ID;
+    int Product_ID;
+    int Quantity;
+    int stock = 0;
+    double Cost = 0;
+    double Unit_price =0;
+    double Amount = 0;
+   
 
     cout << "Enter customer ID: ";
-    cin >> customerID;
+    cin >> Customer_ID;
 
     cout << "Enter product ID: ";
-    cin >> productID;
+    cin >> Product_ID;
 
     cout << "Enter quantity: ";
-    cin >> quantity;
+    cin >> Quantity;
 
     sqlite3_stmt* stmt;
 
-    double price = 0;
-    int stock = 0;
 
     string sql =
-        "SELECT price, quantity FROM product "
-        "WHERE productID=?;";
+        "SELECT Cost, Quantity FROM Product "
+        "WHERE Product_ID=?;";
 
     sqlite3_prepare_v2(DB, sql.c_str(), -1, &stmt, NULL);
 
-    sqlite3_bind_int(stmt, 1, productID);
+    sqlite3_bind_int(stmt, 1, Product_ID);
 
     if (sqlite3_step(stmt) == SQLITE_ROW) {
 
-        price = sqlite3_column_double(stmt, 0);
+        Cost = sqlite3_column_double(stmt, 0);
         stock = sqlite3_column_int(stmt, 1);
     }
     else {
@@ -336,42 +572,42 @@ void makePurchase() {
 
     sqlite3_finalize(stmt);
 
-    if (stock < quantity) {
-        cout << "Not enough stock.\n";
+    if (stock < Quantity) {
+        cout << "Not enough in stock.\n";
         return;
     }
 
-    double total = price * quantity;
+    double Total_cost = Cost * Quantity;
 
     // Create order
 
     sql =
-        "INSERT INTO orders(customerID,orderDate,status,totalAmount) "
+        "INSERT INTO Orders(Customer_ID,Order_date,Order_status,Total_cost) "
         "VALUES(?, datetime('now'), 'Processing', ?);";
 
     sqlite3_prepare_v2(DB, sql.c_str(), -1, &stmt, NULL);
 
-    sqlite3_bind_int(stmt, 1, customerID);
-    sqlite3_bind_double(stmt, 2, total);
+    sqlite3_bind_int(stmt, 1, Customer_ID);
+    sqlite3_bind_double(stmt, 2, Total_cost);
 
     sqlite3_step(stmt);
 
     sqlite3_finalize(stmt);
 
-    int orderID = sqlite3_last_insert_rowid(DB);
+    int Order_ID = sqlite3_last_insert_rowid(DB);
 
     // Add order item
 
     sql =
-        "INSERT INTO orderItem(orderID,productID,quantity,itemPrice) "
+        "INSERT INTO OrderItem(Order_ID,Product_ID,Quantity,Unit_price) "
         "VALUES(?,?,?,?);";
 
     sqlite3_prepare_v2(DB, sql.c_str(), -1, &stmt, NULL);
 
-    sqlite3_bind_int(stmt, 1, orderID);
-    sqlite3_bind_int(stmt, 2, productID);
-    sqlite3_bind_int(stmt, 3, quantity);
-    sqlite3_bind_double(stmt, 4, price);
+    sqlite3_bind_int(stmt, 1, Order_ID);
+    sqlite3_bind_int(stmt, 2, Product_ID);
+    sqlite3_bind_int(stmt, 3, Quantity);
+    sqlite3_bind_double(stmt, 4, Unit_price);
 
     sqlite3_step(stmt);
 
@@ -380,13 +616,13 @@ void makePurchase() {
     // Update inventory
 
     sql =
-        "UPDATE product SET quantity = quantity - ? "
-        "WHERE productID=?;";
+        "UPDATE Product SET Quantity = Quantity - ? "
+        "WHERE Product_ID=?;";
 
     sqlite3_prepare_v2(DB, sql.c_str(), -1, &stmt, NULL);
 
-    sqlite3_bind_int(stmt, 1, quantity);
-    sqlite3_bind_int(stmt, 2, productID);
+    sqlite3_bind_int(stmt, 1, Quantity);
+    sqlite3_bind_int(stmt, 2, Product_ID);
 
     sqlite3_step(stmt);
 
@@ -395,13 +631,13 @@ void makePurchase() {
     // Update customer balance
 
     sql =
-        "UPDATE customer SET balance = balance + ? "
-        "WHERE customerID=?;";
+        "UPDATE Payment SET Amount = Amount + ? "
+        "WHERE Order_ID=?;";
 
     sqlite3_prepare_v2(DB, sql.c_str(), -1, &stmt, NULL);
 
-    sqlite3_bind_double(stmt, 1, total);
-    sqlite3_bind_int(stmt, 2, customerID);
+    sqlite3_bind_double(stmt, 1, Amount);
+    sqlite3_bind_int(stmt, 2, Order_ID);
 
     sqlite3_step(stmt);
 
@@ -412,77 +648,145 @@ void makePurchase() {
 
 // displays customer info
 
-void printCustomerPage() {
+void printCustomerPage(sqlite3 *DB) {
 
-    string sql = "SELECT * FROM customer;";
+    int customerID;
+
+    cout << "Enter Customer ID: ";
+    cin >> customerID;
 
     sqlite3_stmt* stmt;
 
-    sqlite3_prepare_v2(DB, sql.c_str(), -1, &stmt, NULL);
+    string sql =
+        "SELECT First_name, Last_name, Phone, "
+        "Payment_info, Address, Email "
+        "FROM Customers "
+        "WHERE Customer_ID=?;";
 
-    cout << "\n----- CUSTOMER PAGE -----\n";
+    sqlite3_prepare_v2(DB,
+                       sql.c_str(),
+                       -1,
+                       &stmt,
+                       NULL);
 
-    while (sqlite3_step(stmt) == SQLITE_ROW) {
+    sqlite3_bind_int(stmt, 1, customerID);
 
-        cout << "ID: "
-             << sqlite3_column_int(stmt, 0) << endl;
+    int result = sqlite3_step(stmt);
 
-        cout << "Name: "
-             << sqlite3_column_text(stmt, 1) << endl;
+    if (result == SQLITE_ROW) {
+
+        cout << "\n----- CUSTOMER INFORMATION -----\n";
+
+        cout << "Customer ID: "
+             << customerID << endl;
+
+        cout << "First Name: "
+             << sqlite3_column_text(stmt, 0)
+             << endl;
+
+        cout << "Last Name: "
+             << sqlite3_column_text(stmt, 1)
+             << endl;
+
+        cout << "Phone Number: "
+             << sqlite3_column_text(stmt, 2)
+             << endl;
+
+        cout << "Payment Info: "
+             << sqlite3_column_text(stmt, 3)
+             << endl;
+
+        cout << "Address: "
+             << sqlite3_column_text(stmt, 4)
+             << endl;
 
         cout << "Email: "
-             << sqlite3_column_text(stmt, 2) << endl;
+             << sqlite3_column_text(stmt, 5)
+             << endl;
 
-        cout << "Phone: "
-             << sqlite3_column_text(stmt, 3) << endl;
+        cout << "--------------------------------\n";
+    }
+    else {
 
-        cout << "Balance: $"
-             << sqlite3_column_double(stmt, 4) << endl;
-
-        cout << "------------------------\n";
+        cout << "Customer not found.\n";
     }
 
     sqlite3_finalize(stmt);
 }
 
 // shows customer order info
-void printOrderInfoPage() {
+void printOrderInfoPage(sqlite3 *DB) {
+
+    int orderID;
+
+    cout << "Enter Order ID: ";
+    cin >> orderID;
 
     string sql =
-        "SELECT o.orderID, c.name, p.productName, "
-        "oi.quantity, o.totalAmount, o.status "
-        "FROM orders o "
-        "JOIN customer c ON o.customerID = c.customerID "
-        "JOIN orderItem oi ON o.orderID = oi.orderID "
-        "JOIN product p ON oi.productID = p.productID;";
+        "SELECT o.Order_ID, "
+        "c.First_name, "
+        "c.Last_name, "
+        "p.Product_descript, "
+        "oi.Quantity, "
+        "o.Total_cost, "
+        "o.Order_status "
+        "FROM Orders o "
+        "JOIN Customers c ON o.Customer_ID = c.Customer_ID "
+        "JOIN OrderItem oi ON o.Order_ID = oi.Order_ID "
+        "JOIN Product p ON oi.Product_ID = p.Product_ID "
+        "WHERE o.Order_ID=?;";
 
     sqlite3_stmt* stmt;
 
-    sqlite3_prepare_v2(DB, sql.c_str(), -1, &stmt, NULL);
+    sqlite3_prepare_v2(DB,
+                       sql.c_str(),
+                       -1,
+                       &stmt,
+                       NULL);
 
-    cout << "\n----- ORDER INFO PAGE -----\n";
+    sqlite3_bind_int(stmt, 1, orderID);
 
-    while (sqlite3_step(stmt) == SQLITE_ROW) {
+    cout << "\n----- ORDER INFO -----\n";
+
+    int result;
+    bool found = false;
+
+    while ((result = sqlite3_step(stmt)) == SQLITE_ROW) {
+
+        found = true;
 
         cout << "Order ID: "
-             << sqlite3_column_int(stmt, 0) << endl;
+             << sqlite3_column_int(stmt, 0)
+             << endl;
 
         cout << "Customer: "
-             << sqlite3_column_text(stmt, 1) << endl;
+             << sqlite3_column_text(stmt, 1)
+             << " "
+             << sqlite3_column_text(stmt, 2)
+             << endl;
 
         cout << "Product: "
-             << sqlite3_column_text(stmt, 2) << endl;
+             << sqlite3_column_text(stmt, 3)
+             << endl;
 
         cout << "Quantity: "
-             << sqlite3_column_int(stmt, 3) << endl;
+             << sqlite3_column_int(stmt, 4)
+             << endl;
 
         cout << "Total: $"
-             << sqlite3_column_double(stmt, 4) << endl;
+             << sqlite3_column_double(stmt, 5)
+             << endl;
 
         cout << "Status: "
-             << sqlite3_column_text(stmt, 5) << endl;
+             << sqlite3_column_text(stmt, 6)
+             << endl;
 
         cout << "---------------------------\n";
+    }
+
+    if (!found) {
+
+        cout << "Order not found.\n";
     }
 
     sqlite3_finalize(stmt);
